@@ -4,7 +4,7 @@ COPY gradlew gradlew
 COPY gradle gradle
 COPY settings.gradle build.gradle ./
 COPY backend/build.gradle backend/build.gradle
-RUN chmod +x gradlew && ./gradlew :backend:dependencies --no-daemon
+RUN sed -i 's/\r$//' gradlew && chmod +x gradlew && ./gradlew :backend:dependencies --no-daemon
 COPY backend/src backend/src
 RUN ./gradlew :backend:bootJar --no-daemon
 
