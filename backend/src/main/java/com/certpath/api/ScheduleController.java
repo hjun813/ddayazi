@@ -1,0 +1,3 @@
+package com.certpath.api;
+import com.certpath.api.ApiModels.*;import com.certpath.service.CertService;import lombok.RequiredArgsConstructor;import org.springframework.web.bind.annotation.*;import java.time.*;import java.util.*;
+@RestController @RequiredArgsConstructor public class ScheduleController{private final CertService service;@GetMapping("/api/schedules")ApiResponse<List<ScheduleDto>> list(@RequestParam Instant from,@RequestParam Instant to){return ApiResponse.ok(service.schedules(from,to));}@GetMapping("/api/job-roles")ApiResponse<List<JobRoleDto>> jobs(){return ApiResponse.ok(service.jobs());}@GetMapping("/api/recommendations")ApiResponse<List<RecommendationDto>> recommendations(@RequestParam String job){return ApiResponse.ok(service.recommendations(job));}}

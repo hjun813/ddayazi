@@ -1,0 +1,11 @@
+.git
+.gradle
+.idea
+.vscode
+.env
+.tools
+**/build
+frontend/node_modules
+frontend/dist
+frontend/*.tsbuildinfo
+*.log

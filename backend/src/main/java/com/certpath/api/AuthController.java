@@ -1,0 +1,3 @@
+package com.certpath.api;
+import com.certpath.api.ApiModels.*;import com.certpath.service.AuthService;import jakarta.validation.Valid;import lombok.RequiredArgsConstructor;import org.springframework.web.bind.annotation.*;
+@RestController @RequestMapping("/api/auth") @RequiredArgsConstructor public class AuthController{private final AuthService auth;@PostMapping("/signup")ApiResponse<AuthResponse> signup(@Valid @RequestBody SignupRequest r){return ApiResponse.ok(auth.signup(r));}@PostMapping("/login")ApiResponse<AuthResponse> login(@Valid @RequestBody LoginRequest r){return ApiResponse.ok(auth.login(r));}}
