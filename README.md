@@ -28,10 +28,9 @@ docker compose up --build -d
 
 서비스 주소:
 
-- 웹: <http://localhost:5173>
-- 백엔드 API: <http://localhost:8080/api>
-- Swagger UI: <http://localhost:8080/swagger-ui.html>
-- OpenAPI JSON: <http://localhost:8080/v3/api-docs>
+- 웹: <https://ddayazi.vercel.app>
+- 백엔드 API: <https://ddayazi.onrender.com/api>
+- Swagger UI: <https://ddayazi.onrender.com/swagger-ui.html>
 
 상태와 로그 확인:
 
