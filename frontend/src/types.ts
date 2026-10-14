@@ -7,3 +7,5 @@ export type CertificationDetail=Omit<Certification,'recommendedJobs'|'nextSchedu
 export type JobRole={id:number;name:string;description:string};
 export type ApiResponse<T>={success:boolean;data:T;message?:string};
 export type Page<T>={content:T[];totalElements:number;totalPages:number;number:number};
+
+export type ResourceGroup={id:number;name:string;category:string;organization:string;officialUrl:string|null;lastVerifiedAt:string|null;resources:Resource[]};

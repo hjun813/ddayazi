@@ -8,3 +8,5 @@ export const certifications:Certification[]=raw.map((x,i)=>({id:i+1,name:String(
 export const schedules:Schedule[]=certifications.map(c=>c.nextSchedule!);
 export const typeLabel:Record<string,string>={NATIONAL:'국가자격',PRIVATE:'민간자격',VENDOR:'벤더자격',REGISTRATION_OPEN:'접수 시작',REGISTRATION_CLOSE:'접수 마감',EXAM:'시험일',RESULT:'발표일',RENEWAL:'갱신일'};
 export const statuses=[['INTERESTED','관심 있음'],['PLANNED','준비 예정'],['STUDYING','공부 중'],['REGISTERED','접수 완료'],['TAKEN','응시 완료'],['PASSED','취득 완료'],['FAILED','불합격']];
+
+export const difficultyLabel:Record<string,string>={BEGINNER:'입문',INTERMEDIATE:'중급',ADVANCED:'심화'};

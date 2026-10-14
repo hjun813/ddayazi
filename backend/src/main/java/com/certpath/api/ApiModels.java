@@ -14,6 +14,7 @@ public final class ApiModels {
     public record ScheduleDto(Long id,Long certificationId,String certificationName,String examRound,String title,String type,Instant startsAt,Instant endsAt,boolean sampleData){}
     public record CertificationCardDto(Long id,String name,String summary,String category,String type,String organization,String difficulty,Integer preparationWeeks,List<String> recommendedJobs,ScheduleDto nextSchedule,boolean sampleData){}
     public record ResourceDto(Long id,String title,String description,String type,String url,boolean free,boolean official,LocalDate lastCheckedAt){}
+    public record ResourceGroupDto(Long id,String name,String category,String organization,String officialUrl,LocalDate lastVerifiedAt,List<ResourceDto> resources){}
     public record CertificationDetailDto(Long id,String name,String summary,String category,String type,String organization,String difficulty,Integer preparationWeeks,String examMethod,List<String> subjects,String passingCriteria,String eligibility,String cost,String validity,String officialUrl,String registrationUrl,LocalDate lastVerifiedAt,List<JobRecommendationDto> recommendedJobs,List<ScheduleDto> schedules,List<ResourceDto> resources,boolean sampleData){}
     public record JobRecommendationDto(Long jobRoleId,String jobRole,int score,String reason,String level){}
     public record RecommendationDto(int rank,int score,CertificationCardDto certification,String reason,String progressStatus){}
