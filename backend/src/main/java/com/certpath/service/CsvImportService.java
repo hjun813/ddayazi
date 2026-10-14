@@ -74,7 +74,7 @@ public class CsvImportService {
     }
 
     public String template(ImportKind kind){
-        if(kind==ImportKind.CERTIFICATION)return String.join(",",CERT_HEADERS)+",recommendedJob\n정보처리기사,공식 설명,소프트웨어,NATIONAL,한국산업인력공단,INTERMEDIATE,12,https://example.org/cert,2026-09-21,VERIFIED,true,백엔드 개발\n";
+        if(kind==ImportKind.CERTIFICATION)return String.join(",",CERT_HEADERS)+",recommendedJobs\n정보처리기사,공식 설명,소프트웨어,NATIONAL,한국산업인력공단,INTERMEDIATE,12,https://example.org/cert,2026-09-21,VERIFIED,true,백엔드 개발:95|프론트엔드 개발:88\n";
         return String.join(",",SCHEDULE_HEADERS)+"\n정보처리기사,2026-1회,원서 접수 시작,REGISTRATION_OPEN,2026-10-01T00:00:00Z,2026-10-05T14:59:59Z,https://example.org/schedule,2026-09-21,VERIFIED\n";
     }
 
@@ -98,7 +98,7 @@ public class CsvImportService {
 
     private void applyCertification(Certification c,Map<String,String> r){c.setName(r.get("name"));c.setSummary(r.get("summary"));c.setCategory(r.get("category"));c.setType(CertificationType.valueOf(r.get("type")));c.setOrganization(r.get("organization"));c.setDifficulty(Difficulty.valueOf(r.get("difficulty")));c.setPreparationWeeks(Integer.valueOf(r.get("preparationWeeks")));c.setOfficialUrl(r.get("officialSourceUrl"));c.setLastVerifiedAt(LocalDate.parse(r.get("lastVerifiedAt")));c.setReviewStatus(ReviewStatus.valueOf(r.get("reviewStatus")));c.setPublished(Boolean.parseBoolean(r.get("published")));c.setSampleData(false);}
     private void applySchedule(CertificationSchedule s,Certification c,Map<String,String> r){s.setCertification(c);s.setExamRound(r.get("examRound"));s.setTitle(r.get("title"));s.setType(ScheduleType.valueOf(r.get("scheduleType")));s.setStartsAt(Instant.parse(r.get("startsAt")));s.setEndsAt(r.get("endsAt").isBlank()?null:Instant.parse(r.get("endsAt")));s.setSourceUrl(r.get("officialSourceUrl"));s.setLastVerifiedAt(LocalDate.parse(r.get("lastVerifiedAt")));s.setReviewStatus(ReviewStatus.valueOf(r.get("reviewStatus")));s.setSampleData(false);s.setActive(true);}
-    private List<String> changedCertification(Certification c,Map<String,String> r){var x=new ArrayList<String>();diff(x,"summary",c.getSummary(),r.get("summary"));diff(x,"category",c.getCategory(),r.get("category"));diff(x,"type",c.getType().name(),r.get("type"));diff(x,"organization",c.getOrganization(),r.get("organization"));diff(x,"difficulty",c.getDifficulty().name(),r.get("difficulty"));diff(x,"preparationWeeks",String.valueOf(c.getPreparationWeeks()),r.get("preparationWeeks"));diff(x,"officialSourceUrl",c.getOfficialUrl(),r.get("officialSourceUrl"));diff(x,"lastVerifiedAt",String.valueOf(c.getLastVerifiedAt()),r.get("lastVerifiedAt"));diff(x,"reviewStatus",c.getReviewStatus()==null?"DRAFT":c.getReviewStatus().name(),r.get("reviewStatus"));diff(x,"published",String.valueOf(c.isPublished()),r.get("published"));diff(x,"sampleData",c.isSampleData(),false);String job=r.getOrDefault("recommendedJob","");if(!job.isBlank()&&!hasRecommendedJob(c,job))x.add("recommendedJob");return x;}
+    private List<String> changedCertification(Certification c,Map<String,String> r){var x=new ArrayList<String>();diff(x,"summary",c.getSummary(),r.get("summary"));diff(x,"category",c.getCategory(),r.get("category"));diff(x,"type",c.getType().name(),r.get("type"));diff(x,"organization",c.getOrganization(),r.get("organization"));diff(x,"difficulty",c.getDifficulty().name(),r.get("difficulty"));diff(x,"preparationWeeks",String.valueOf(c.getPreparationWeeks()),r.get("preparationWeeks"));diff(x,"officialSourceUrl",c.getOfficialUrl(),r.get("officialSourceUrl"));diff(x,"lastVerifiedAt",String.valueOf(c.getLastVerifiedAt()),r.get("lastVerifiedAt"));diff(x,"reviewStatus",c.getReviewStatus()==null?"DRAFT":c.getReviewStatus().name(),r.get("reviewStatus"));diff(x,"published",String.valueOf(c.isPublished()),r.get("published"));diff(x,"sampleData",c.isSampleData(),false);if(recommendedJobsChanged(c,r))x.add(recommendationField(r));return x;}
     private List<String> changedSchedule(CertificationSchedule s,Map<String,String> r){var x=new ArrayList<String>();diff(x,"title",s.getTitle(),r.get("title"));diff(x,"startsAt",s.getStartsAt().toString(),r.get("startsAt"));diff(x,"endsAt",s.getEndsAt()==null?"":s.getEndsAt().toString(),r.get("endsAt"));diff(x,"officialSourceUrl",s.getSourceUrl(),r.get("officialSourceUrl"));diff(x,"lastVerifiedAt",String.valueOf(s.getLastVerifiedAt()),r.get("lastVerifiedAt"));diff(x,"reviewStatus",s.getReviewStatus()==null?"DRAFT":s.getReviewStatus().name(),r.get("reviewStatus"));return x;}
     private void diff(List<String>x,String field,Object a,Object b){if(!Objects.equals(a==null?"":String.valueOf(a),b==null?"":String.valueOf(b)))x.add(field);}
     private void validateRequired(Map<String,String>r,List<String>fields,List<FieldError>e){for(String f:fields)if(r.getOrDefault(f,"").isBlank())e.add(new FieldError(f,"필수 값입니다."));}
@@ -111,19 +111,63 @@ public class CsvImportService {
     private void cleanup(){pending.entrySet().removeIf(e->e.getValue().createdAt().isBefore(Instant.now().minus(Duration.ofMinutes(30))));}
 
     private void validateRecommendedJob(Map<String,String> row,List<FieldError> errors){
-        String name=row.getOrDefault("recommendedJob","");
-        if(!name.isBlank()&&jobs.findByName(name).filter(JobRole::isActive).isEmpty())
-            errors.add(new FieldError("recommendedJob","등록된 활성 직무를 입력하세요: "+name));
-    }
-    private boolean hasRecommendedJob(Certification c,String name){
-        return c.getJobRoles().stream().anyMatch(link->link.getJobRole().getName().equals(name));
+        String field=recommendationField(row);
+        for(var input:parseRecommendedJobs(row,errors)){
+            if(jobs.findByName(input.name()).filter(JobRole::isActive).isEmpty())
+                errors.add(new FieldError(field,"등록된 활성 직무를 입력하세요: "+input.name()));
+        }
     }
     private void applyRecommendedJob(Certification c,Map<String,String> row){
-        String name=row.getOrDefault("recommendedJob","");
-        if(name.isBlank())return;
-        var job=jobs.findByName(name).filter(JobRole::isActive)
-            .orElseThrow(()->new IllegalArgumentException("등록된 활성 직무를 찾을 수 없습니다: "+name));
-        if(!hasRecommendedJob(c,name))c.getJobRoles().add(new CertificationJobRole(c,job,85,
-            name+" 직무 관련 자격증으로 관리자가 등록했습니다.",c.getDifficulty().name()));
+        var errors=new ArrayList<FieldError>();
+        var inputs=parseRecommendedJobs(row,errors);
+        if(!errors.isEmpty())throw new IllegalArgumentException(errors.get(0).message());
+        for(var input:inputs){
+            var job=jobs.findByName(input.name()).filter(JobRole::isActive)
+                .orElseThrow(()->new IllegalArgumentException("등록된 활성 직무를 찾을 수 없습니다: "+input.name()));
+            var existing=c.getJobRoles().stream().filter(link->link.getJobRole().getId().equals(job.getId())).findFirst();
+            if(existing.isPresent()){
+                if(input.score()!=null)existing.get().setRelevance(input.score());
+            }else c.getJobRoles().add(new CertificationJobRole(c,job,input.score()==null?85:input.score(),
+                input.name()+" 직무 관련 자격증으로 관리자가 등록했습니다.",c.getDifficulty().name()));
+        }
+    }
+    private record RecommendedJobInput(String name,Integer score){}
+    private String recommendationField(Map<String,String> row){
+        return row.getOrDefault("recommendedJobs","").isBlank()?"recommendedJob":"recommendedJobs";
+    }
+    private List<RecommendedJobInput> parseRecommendedJobs(Map<String,String> row,List<FieldError> errors){
+        String multiple=row.getOrDefault("recommendedJobs","").trim();
+        String single=row.getOrDefault("recommendedJob","").trim();
+        if(!multiple.isEmpty()&&!single.isEmpty()){
+            errors.add(new FieldError("recommendedJobs","recommendedJob과 recommendedJobs 중 하나만 입력하세요."));
+            return List.of();
+        }
+        if(multiple.isEmpty())return single.isEmpty()?List.of():List.of(new RecommendedJobInput(single,null));
+        var result=new ArrayList<RecommendedJobInput>();var names=new HashSet<String>();
+        for(String entry:multiple.split("\\|",-1)){
+            var parts=entry.trim().split(":",-1);String name=parts[0].trim();Integer score=null;
+            if(name.isEmpty()||parts.length>2){
+                errors.add(new FieldError("recommendedJobs","직무명 또는 직무명:점수 형식으로 입력하세요: "+entry));continue;
+            }
+            if(!names.add(name))errors.add(new FieldError("recommendedJobs","중복된 직무입니다: "+name));
+            if(parts.length==2){
+                try{
+                    String value=parts[1].trim();
+                    if(!value.matches("[0-9]{1,3}"))throw new IllegalArgumentException();
+                    score=Integer.valueOf(value);if(score>100)throw new IllegalArgumentException();
+                }catch(IllegalArgumentException e){
+                    errors.add(new FieldError("recommendedJobs","연관도는 0~100 사이의 정수여야 합니다: "+entry));continue;
+                }
+            }
+            result.add(new RecommendedJobInput(name,score));
+        }
+        return result;
+    }
+    private boolean recommendedJobsChanged(Certification c,Map<String,String> row){
+        for(var input:parseRecommendedJobs(row,new ArrayList<>())){
+            var existing=c.getJobRoles().stream().filter(link->link.getJobRole().getName().equals(input.name())).findFirst();
+            if(existing.isEmpty()||(input.score()!=null&&existing.get().getRelevance()!=input.score()))return true;
+        }
+        return false;
     }
 }
