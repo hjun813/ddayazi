@@ -1,4 +1,4 @@
-import type {ApiResponse,Certification,JobRole,Page,Recommendation,Schedule} from './types';
+import type {ApiResponse,Certification,CertificationDetail,JobRole,Page,Recommendation,Schedule} from './types';
 import {clearSession,getToken} from './auth';
 const BASE=import.meta.env.VITE_API_URL||'http://localhost:8080/api';
 async function call<T>(path:string,init?:RequestInit){
@@ -15,7 +15,7 @@ export type MyCertification={certificationId:number;certificationName:string;sta
 export type ImportRow={rowNumber:number;key:string;action:'CREATE'|'UPDATE'|'UNCHANGED'|'ERROR';changedFields:string[];errors:ImportError[];values:Record<string,string>};
 export type ImportPreview={token:string;kind:'CERTIFICATION'|'SCHEDULE';totalRows:number;validRows:number;errorRows:number;createCount:number;updateCount:number;unchangedCount:number;canCommit:boolean;rows:ImportRow[]};
 export const api={
-  certifications:(q='')=>call<Page<Certification>>('/certifications'+q),detail:(id:string)=>call<any>(`/certifications/${id}`),jobs:()=>call<JobRole[]>('/job-roles'),schedules:(from:string,to:string)=>call<Schedule[]>(`/schedules?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`),recommendations:(job:string)=>call<Recommendation[]>(`/recommendations?job=${encodeURIComponent(job)}`),
+  certifications:(q='')=>call<Page<Certification>>('/certifications'+q),detail:(id:string)=>call<CertificationDetail>(`/certifications/${id}`),jobs:()=>call<JobRole[]>('/job-roles'),schedules:(from:string,to:string)=>call<Schedule[]>(`/schedules?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`),recommendations:(job:string)=>call<Recommendation[]>(`/recommendations?job=${encodeURIComponent(job)}`),
   login:(email:string,password:string)=>call<{accessToken:string;expiresIn:number;nickname:string;role:string}>('/auth/login',{method:'POST',body:JSON.stringify({email,password})}),signup:(body:unknown)=>call<{accessToken:string;expiresIn:number;nickname:string;role:string}>('/auth/signup',{method:'POST',body:JSON.stringify(body)}),profile:()=>call<{nickname:string;desiredJobRole:string|null}>('/me/profile'),mine:()=>call<MyCertification[]>('/me/certifications'),add:(id:number)=>call<MyCertification>(`/me/certifications/${id}`,{method:'POST'}),status:(id:number,status:string)=>call<MyCertification>(`/me/certifications/${id}/status`,{method:'PATCH',body:JSON.stringify({status})}),remove:(id:number)=>call<void>(`/me/certifications/${id}`,{method:'DELETE'}),
   validateImport:(kind:'certifications'|'schedules',file:File)=>{const form=new FormData();form.append('file',file);return call<ImportPreview>(`/admin/imports/${kind}/validate`,{method:'POST',body:form});},
   commitImport:(token:string)=>call<{kind:string;created:number;updated:number;unchanged:number}>(`/admin/imports/${token}/commit`,{method:'POST'}),

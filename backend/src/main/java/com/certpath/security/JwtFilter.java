@@ -1,6 +1,6 @@
 package com.certpath.security;
 
-import com.certpath.repository.UserRepository;
+import com.certpath.domain.Enums.Role;
 import jakarta.servlet.*;
 import jakarta.servlet.http.*;
 import lombok.RequiredArgsConstructor;
@@ -14,10 +14,17 @@ import java.util.List;
 
 @Component @RequiredArgsConstructor
 public class JwtFilter extends OncePerRequestFilter {
-    private final JwtService jwt; private final UserRepository users;
+    private final JwtService jwt;
     protected void doFilterInternal(HttpServletRequest req,HttpServletResponse res,FilterChain chain)throws ServletException,IOException{
         var h=req.getHeader("Authorization");
-        if(h!=null&&h.startsWith("Bearer "))try{var email=jwt.email(h.substring(7));users.findByEmail(email).ifPresent(u->SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(email,null,List.of(new SimpleGrantedAuthority("ROLE_"+u.getRole().name())))));}catch(Exception ignored){}
+        if(h!=null&&h.startsWith("Bearer "))try{
+            var claims=jwt.claims(h.substring(7));
+            var email=claims.getSubject();
+            var roleClaim=claims.get("role",String.class);
+            if(roleClaim==null)throw new IllegalArgumentException("Missing role claim");
+            var role=Role.valueOf(roleClaim);
+            if(email!=null&&!email.isBlank())SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(email,null,List.of(new SimpleGrantedAuthority("ROLE_"+role.name()))));
+        }catch(io.jsonwebtoken.JwtException|IllegalArgumentException ignored){}
         chain.doFilter(req,res);
     }
 }

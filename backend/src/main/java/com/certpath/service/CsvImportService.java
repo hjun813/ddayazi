@@ -31,8 +31,10 @@ public class CsvImportService {
     private static final List<String> SCHEDULE_HEADERS = List.of("certificationName","examRound","title","scheduleType","startsAt","endsAt","officialSourceUrl","lastVerifiedAt","reviewStatus");
     private final CertificationRepository certifications;
     private final ScheduleRepository schedules;
+    private final JobRoleRepository jobs;
     private final Map<String,Pending> pending = new ConcurrentHashMap<>();
 
+    @Transactional(readOnly=true)
     public ImportPreview validate(ImportKind kind, byte[] content) {
         cleanup();
         var parsed = parse(content, kind == ImportKind.CERTIFICATION ? CERT_HEADERS : SCHEDULE_HEADERS);
@@ -58,7 +60,7 @@ public class CsvImportService {
             if(action==RowAction.UNCHANGED){unchanged++;continue;}
             if(item.kind()==ImportKind.CERTIFICATION){
                 var entity=certifications.findByNameIgnoreCase(row.get("name")).orElseGet(Certification::new);
-                boolean isNew=entity.getId()==null; applyCertification(entity,row); certifications.save(entity);
+                boolean isNew=entity.getId()==null; applyCertification(entity,row); applyRecommendedJob(entity,row); certifications.save(entity);
                 if(isNew)created++;else updated++;
             }else{
                 var cert=certifications.findByNameIgnoreCase(row.get("certificationName")).orElseThrow();
@@ -72,13 +74,13 @@ public class CsvImportService {
     }
 
     public String template(ImportKind kind){
-        if(kind==ImportKind.CERTIFICATION)return String.join(",",CERT_HEADERS)+"\n정보처리기사,공식 설명,소프트웨어,NATIONAL,한국산업인력공단,INTERMEDIATE,12,https://example.org/cert,2026-09-21,VERIFIED,true\n";
+        if(kind==ImportKind.CERTIFICATION)return String.join(",",CERT_HEADERS)+",recommendedJob\n정보처리기사,공식 설명,소프트웨어,NATIONAL,한국산업인력공단,INTERMEDIATE,12,https://example.org/cert,2026-09-21,VERIFIED,true,백엔드 개발\n";
         return String.join(",",SCHEDULE_HEADERS)+"\n정보처리기사,2026-1회,원서 접수 시작,REGISTRATION_OPEN,2026-10-01T00:00:00Z,2026-10-05T14:59:59Z,https://example.org/schedule,2026-09-21,VERIFIED\n";
     }
 
     private List<PreviewRow> previewCertifications(List<Map<String,String>> rows){
         var result=new ArrayList<PreviewRow>();var keys=new HashSet<String>();int number=2;
-        for(var row:rows){var errors=new ArrayList<FieldError>();validateRequired(row,CERT_HEADERS,errors);validateEnum(row,"type",CertificationType.class,errors);validateEnum(row,"difficulty",Difficulty.class,errors);validateEnum(row,"reviewStatus",ReviewStatus.class,errors);validateInt(row,"preparationWeeks",1,260,errors);validateUrl(row,"officialSourceUrl",errors);validateDate(row,"lastVerifiedAt",errors);validateBoolean(row,"published",errors);String key=row.getOrDefault("name","").trim().toLowerCase();if(!key.isBlank()&&!keys.add(key))errors.add(new FieldError("name","CSV 안에서 자격증명이 중복됩니다."));var existing=errors.isEmpty()?certifications.findByNameIgnoreCase(row.get("name")):Optional.<Certification>empty();var changed=existing.map(x->changedCertification(x,row)).orElse(List.of());var action=!errors.isEmpty()?RowAction.ERROR:existing.isEmpty()?RowAction.CREATE:changed.isEmpty()?RowAction.UNCHANGED:RowAction.UPDATE;result.add(new PreviewRow(number++,row.getOrDefault("name",""),action,changed,errors,row));}
+        for(var row:rows){var errors=new ArrayList<FieldError>();validateRequired(row,CERT_HEADERS,errors);validateEnum(row,"type",CertificationType.class,errors);validateEnum(row,"difficulty",Difficulty.class,errors);validateEnum(row,"reviewStatus",ReviewStatus.class,errors);validateInt(row,"preparationWeeks",1,260,errors);validateUrl(row,"officialSourceUrl",errors);validateDate(row,"lastVerifiedAt",errors);validateBoolean(row,"published",errors);validateRecommendedJob(row,errors);String key=row.getOrDefault("name","").trim().toLowerCase();if(!key.isBlank()&&!keys.add(key))errors.add(new FieldError("name","CSV 안에서 자격증명이 중복됩니다."));var existing=errors.isEmpty()?certifications.findByNameIgnoreCase(row.get("name")):Optional.<Certification>empty();var changed=existing.map(x->changedCertification(x,row)).orElse(List.of());var action=!errors.isEmpty()?RowAction.ERROR:existing.isEmpty()?RowAction.CREATE:changed.isEmpty()?RowAction.UNCHANGED:RowAction.UPDATE;result.add(new PreviewRow(number++,row.getOrDefault("name",""),action,changed,errors,row));}
         return result;
     }
 
@@ -96,7 +98,7 @@ public class CsvImportService {
 
     private void applyCertification(Certification c,Map<String,String> r){c.setName(r.get("name"));c.setSummary(r.get("summary"));c.setCategory(r.get("category"));c.setType(CertificationType.valueOf(r.get("type")));c.setOrganization(r.get("organization"));c.setDifficulty(Difficulty.valueOf(r.get("difficulty")));c.setPreparationWeeks(Integer.valueOf(r.get("preparationWeeks")));c.setOfficialUrl(r.get("officialSourceUrl"));c.setLastVerifiedAt(LocalDate.parse(r.get("lastVerifiedAt")));c.setReviewStatus(ReviewStatus.valueOf(r.get("reviewStatus")));c.setPublished(Boolean.parseBoolean(r.get("published")));c.setSampleData(false);}
     private void applySchedule(CertificationSchedule s,Certification c,Map<String,String> r){s.setCertification(c);s.setExamRound(r.get("examRound"));s.setTitle(r.get("title"));s.setType(ScheduleType.valueOf(r.get("scheduleType")));s.setStartsAt(Instant.parse(r.get("startsAt")));s.setEndsAt(r.get("endsAt").isBlank()?null:Instant.parse(r.get("endsAt")));s.setSourceUrl(r.get("officialSourceUrl"));s.setLastVerifiedAt(LocalDate.parse(r.get("lastVerifiedAt")));s.setReviewStatus(ReviewStatus.valueOf(r.get("reviewStatus")));s.setSampleData(false);s.setActive(true);}
-    private List<String> changedCertification(Certification c,Map<String,String> r){var x=new ArrayList<String>();diff(x,"summary",c.getSummary(),r.get("summary"));diff(x,"category",c.getCategory(),r.get("category"));diff(x,"type",c.getType().name(),r.get("type"));diff(x,"organization",c.getOrganization(),r.get("organization"));diff(x,"difficulty",c.getDifficulty().name(),r.get("difficulty"));diff(x,"preparationWeeks",String.valueOf(c.getPreparationWeeks()),r.get("preparationWeeks"));diff(x,"officialSourceUrl",c.getOfficialUrl(),r.get("officialSourceUrl"));diff(x,"lastVerifiedAt",String.valueOf(c.getLastVerifiedAt()),r.get("lastVerifiedAt"));diff(x,"reviewStatus",c.getReviewStatus()==null?"DRAFT":c.getReviewStatus().name(),r.get("reviewStatus"));diff(x,"published",String.valueOf(c.isPublished()),r.get("published"));return x;}
+    private List<String> changedCertification(Certification c,Map<String,String> r){var x=new ArrayList<String>();diff(x,"summary",c.getSummary(),r.get("summary"));diff(x,"category",c.getCategory(),r.get("category"));diff(x,"type",c.getType().name(),r.get("type"));diff(x,"organization",c.getOrganization(),r.get("organization"));diff(x,"difficulty",c.getDifficulty().name(),r.get("difficulty"));diff(x,"preparationWeeks",String.valueOf(c.getPreparationWeeks()),r.get("preparationWeeks"));diff(x,"officialSourceUrl",c.getOfficialUrl(),r.get("officialSourceUrl"));diff(x,"lastVerifiedAt",String.valueOf(c.getLastVerifiedAt()),r.get("lastVerifiedAt"));diff(x,"reviewStatus",c.getReviewStatus()==null?"DRAFT":c.getReviewStatus().name(),r.get("reviewStatus"));diff(x,"published",String.valueOf(c.isPublished()),r.get("published"));diff(x,"sampleData",c.isSampleData(),false);String job=r.getOrDefault("recommendedJob","");if(!job.isBlank()&&!hasRecommendedJob(c,job))x.add("recommendedJob");return x;}
     private List<String> changedSchedule(CertificationSchedule s,Map<String,String> r){var x=new ArrayList<String>();diff(x,"title",s.getTitle(),r.get("title"));diff(x,"startsAt",s.getStartsAt().toString(),r.get("startsAt"));diff(x,"endsAt",s.getEndsAt()==null?"":s.getEndsAt().toString(),r.get("endsAt"));diff(x,"officialSourceUrl",s.getSourceUrl(),r.get("officialSourceUrl"));diff(x,"lastVerifiedAt",String.valueOf(s.getLastVerifiedAt()),r.get("lastVerifiedAt"));diff(x,"reviewStatus",s.getReviewStatus()==null?"DRAFT":s.getReviewStatus().name(),r.get("reviewStatus"));return x;}
     private void diff(List<String>x,String field,Object a,Object b){if(!Objects.equals(a==null?"":String.valueOf(a),b==null?"":String.valueOf(b)))x.add(field);}
     private void validateRequired(Map<String,String>r,List<String>fields,List<FieldError>e){for(String f:fields)if(r.getOrDefault(f,"").isBlank())e.add(new FieldError(f,"필수 값입니다."));}
@@ -107,4 +109,21 @@ public class CsvImportService {
     private void validateInstant(Map<String,String>r,String f,boolean optional,List<FieldError>e){String v=r.getOrDefault(f,"");if(v.isBlank()&&optional)return;if(v.isBlank())return;try{Instant.parse(v);}catch(Exception x){e.add(new FieldError(f,"UTC ISO-8601 형식이어야 합니다. 예: 2026-10-01T00:00:00Z"));}}
     private void validateUrl(Map<String,String>r,String f,List<FieldError>e){String v=r.getOrDefault(f,"");if(v.isBlank())return;try{var u=URI.create(v);if(!Set.of("http","https").contains(u.getScheme())||u.getHost()==null)throw new Exception();}catch(Exception x){e.add(new FieldError(f,"http 또는 https 공식 출처 URL이어야 합니다."));}}
     private void cleanup(){pending.entrySet().removeIf(e->e.getValue().createdAt().isBefore(Instant.now().minus(Duration.ofMinutes(30))));}
+
+    private void validateRecommendedJob(Map<String,String> row,List<FieldError> errors){
+        String name=row.getOrDefault("recommendedJob","");
+        if(!name.isBlank()&&jobs.findByName(name).filter(JobRole::isActive).isEmpty())
+            errors.add(new FieldError("recommendedJob","등록된 활성 직무를 입력하세요: "+name));
+    }
+    private boolean hasRecommendedJob(Certification c,String name){
+        return c.getJobRoles().stream().anyMatch(link->link.getJobRole().getName().equals(name));
+    }
+    private void applyRecommendedJob(Certification c,Map<String,String> row){
+        String name=row.getOrDefault("recommendedJob","");
+        if(name.isBlank())return;
+        var job=jobs.findByName(name).filter(JobRole::isActive)
+            .orElseThrow(()->new IllegalArgumentException("등록된 활성 직무를 찾을 수 없습니다: "+name));
+        if(!hasRecommendedJob(c,name))c.getJobRoles().add(new CertificationJobRole(c,job,85,
+            name+" 직무 관련 자격증으로 관리자가 등록했습니다.",c.getDifficulty().name()));
+    }
 }

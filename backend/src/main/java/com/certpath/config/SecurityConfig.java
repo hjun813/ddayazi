@@ -17,7 +17,7 @@ public class SecurityConfig {
     @Bean PasswordEncoder passwordEncoder(){return new BCryptPasswordEncoder();}
     @Bean SecurityFilterChain chain(HttpSecurity http, JwtFilter jwt) throws Exception {
         return http.csrf(c->c.disable()).cors(c->{}).sessionManagement(s->s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-          .authorizeHttpRequests(a->a.requestMatchers("/api/auth/**","/api/certifications/**","/api/schedules/**","/api/job-roles/**","/v3/api-docs/**","/swagger-ui.html","/swagger-ui/**").permitAll().requestMatchers("/api/admin/**").hasRole("ADMIN").anyRequest().authenticated())
+          .authorizeHttpRequests(a->a.requestMatchers("/api/auth/**","/api/certifications/**","/api/schedules/**","/api/recommendations/**","/api/job-roles/**","/v3/api-docs/**","/swagger-ui.html","/swagger-ui/**").permitAll().requestMatchers("/api/admin/**").hasRole("ADMIN").anyRequest().authenticated())
           .addFilterBefore(jwt, UsernamePasswordAuthenticationFilter.class).build();
     }
     @Bean CorsConfigurationSource corsConfigurationSource(org.springframework.core.env.Environment env){
